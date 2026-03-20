@@ -1,0 +1,375 @@
+---
+import MainLayout from "../layouts/main.astro";
+---
+
+<MainLayout title="Gestión de Pedidos">
+  <div class="p-4 space-y-6">
+    
+    <div id="global-error" class="hidden p-4 rounded-md bg-red-100 text-red-700 border border-red-200"></div>
+
+    <section>
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold">Pedidos Actuales</h2>
+        <div class="flex items-center gap-2">
+          <label for="search-pedido" class="text-sm text-gray-600">Buscar</label>
+          <input
+            id="search-pedido"
+            type="search"
+            placeholder="Nombre del pedido"
+            class="search-pedido w-56 rounded-md border px-2 py-1 text-sm bg-white"
+          />
+          <label for="filter-comprador" class="text-sm text-gray-600">Filtrar por comprador</label>
+          <select id="filter-comprador" class="filter-comprador rounded-md border px-2 py-1 text-sm bg-white">
+            <option value="0" selected>Sin asignar</option>
+            <option value="all">Todos</option>
+            </select>
+          <span id="filter-total" class="ml-4 text-sm font-semibold text-gray-700">Total filtrado: $0.00</span>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
+        <table id="pedidos-table" class="min-w-full text-sm bg-white">
+          <thead class="bg-gray-50 border-b">
+            <tr>
+              <th class="px-4 py-3 text-left font-semibold text-gray-700">Pedido</th>
+              <th class="px-4 py-3 text-left font-semibold text-gray-700">Imagen</th>
+              <th class="px-4 py-3 text-left font-semibold text-gray-700">Nombre</th>
+              <th class="px-4 py-3 text-left font-semibold text-gray-700">Variante</th>
+              <th class="px-4 py-3 text-left font-semibold text-gray-700">Precio</th>
+              <th class="px-4 py-3 text-left font-semibold text-gray-700">Cantidad</th>
+              <th class="px-4 py-3 text-left font-semibold text-gray-700">Comprador</th>
+            </tr>
+          </thead>
+          <tbody id="pedidos-body" class="divide-y divide-gray-100">
+            <tr>
+                <td colspan="7" class="p-8 text-center text-gray-500 italic">Cargando pedidos...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <div
+    id="image-zoom-modal"
+    class="fixed inset-0 z-50 hidden items-center justify-center bg-black/90 p-4 backdrop-blur-sm"
+  >
+    <button
+      type="button"
+      data-close
+      class="absolute top-6 right-6 text-white bg-white/10 hover:bg-white/20 rounded-full p-2 transition-colors"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+      </svg>
+    </button>
+    <img id="zoomed-image" class="max-h-[85vh] max-w-[90vw] rounded shadow-2xl" alt="Zoom" />
+  </div>
+</MainLayout>
+
+<script>
+  interface Comprador {
+    id?: number;
+    id_comprador?: number;
+    nombre?: string;
+    name?: string;
+    first_name?: string;
+    last_name?: string;
+    comprador?: string;
+    username?: string;
+    email?: string;
+  }
+
+  interface Pedido {
+    id_pedido: number;
+    imagen?: string;
+    nombre?: string;
+    variante?: string;
+    precio?: number | string;
+    cantidad?: number | string;
+    id_comprador?: number | null;
+    [key: string]: any;
+  }
+  const serverBaseUrl = "http://192.168.3.16:8000/api/v1";
+  const apiCompradores = `${serverBaseUrl}/comprador`;
+  const apiPedidos = `${serverBaseUrl}/pedidos`;
+  const asignarComprador = `${serverBaseUrl}/pedidos/asignar`;
+  const desasignarCompradorBase = `${serverBaseUrl}/pedidos/desasignar`;
+
+  let globalCompradores: Comprador[] = [];
+  let globalPedidos: Pedido[] = [];
+
+  function getCompradorLabel(cmp: Comprador) {
+    return (
+      cmp.nombre ||
+      cmp.name ||
+      [cmp.first_name, cmp.last_name].filter(Boolean).join(" ") ||
+      cmp.comprador ||
+      cmp.username ||
+      cmp.email ||
+      `ID: ${cmp.id ?? cmp.id_comprador}`
+    );
+  }
+
+  function formatPrice(v: any) {
+    const n = Number(v);
+    return Number.isFinite(n)
+      ? new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: "USD",
+        }).format(n)
+      : String(v ?? "");
+  }
+
+  function calculateTotalAndFilter() {
+    const filterSelect = document.getElementById('filter-comprador') as HTMLSelectElement | null;
+    const searchInput = document.getElementById('search-pedido') as HTMLInputElement | null;
+    const totalLabel = document.getElementById('filter-total');
+    if (!filterSelect || !searchInput || !totalLabel) return;
+
+    const value = filterSelect.value;
+    const query = searchInput.value.trim().toLowerCase();
+    const rows = document.querySelectorAll('#pedidos-body tr');
+    let sum = 0;
+
+    rows.forEach((row) => {
+        const tr = row as HTMLElement;
+        const cid = tr.getAttribute('data-comprador-id') || '';
+      const name = (tr.getAttribute('data-nombre') || '').toLowerCase();
+        
+      const matchBuyer = (value === 'all') ||
+                 (value === '0' && (cid === '0' || cid === '')) ||
+                 (cid === value);
+      const matchName = !query || name.includes(query);
+      const show = matchBuyer && matchName;
+        
+        if (show) {
+            tr.classList.remove('hidden');
+            const t = Number(tr.getAttribute('data-total')) || 0;
+            sum += t;
+        } else {
+            tr.classList.add('hidden');
+        }
+    });
+
+    totalLabel.textContent = `Total filtrado: ${formatPrice(sum)}`;
+  }
+
+  function renderFilterOptions() {
+    const select = document.getElementById('filter-comprador') as HTMLSelectElement | null;
+    if (!select) return;
+
+    select.innerHTML = `
+      <option value="0" selected>Sin asignar</option>
+      <option value="all">Todos</option>
+    `;
+
+    globalCompradores.forEach(cmp => {
+        const opt = document.createElement('option');
+        const id = cmp.id ?? cmp.id_comprador;
+        opt.value = String(id);
+        opt.textContent = getCompradorLabel(cmp);
+        select.appendChild(opt);
+    });
+  }
+
+  function renderTable() {
+    const tbody = document.getElementById('pedidos-body');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+
+    if (globalPedidos.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="p-8 text-center rounded-lg border-2 border-dashed border-gray-200 text-gray-400">
+                    No se encontraron pedidos.
+                </td>
+            </tr>`;
+        return;
+    }
+
+    const buyerOptionsHTML = globalCompradores.map(cmp => {
+        const id = cmp.id ?? cmp.id_comprador;
+        return `<option value="${id}">${getCompradorLabel(cmp)}</option>`;
+    }).join('');
+
+    globalPedidos.forEach(p => {
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-gray-50 transition-colors";
+        
+        const pId = p.id_pedido;
+        const cId = p.id_comprador ? String(p.id_comprador) : '';
+        const precio = Number(p.precio) || 0;
+        const cantidad = Number(p.cantidad) || 0;
+        const total = precio * cantidad;
+
+        tr.setAttribute('data-comprador-id', cId);
+        tr.setAttribute('data-nombre', String(p.nombre || ''));
+        tr.setAttribute('data-total', String(total));
+        tr.innerHTML = `
+            <td class="px-4 py-3 align-middle text-gray-600">${pId}</td>
+            <td class="px-4 py-3 align-middle text-gray-600">
+                <img 
+                    src="${p.imagen || ''}" 
+                    data-zoom-src="${p.imagen || ''}" 
+                    alt="${p.nombre || 'Producto'}" 
+                    class="h-12 w-12 object-cover rounded shadow-sm cursor-zoom-in hover:opacity-80 transition-opacity"
+                />
+            </td>
+            <td class="px-4 py-3 align-middle text-gray-600">${p.nombre || ''}</td>
+            <td class="px-4 py-3 align-middle text-gray-600">${p.variante || ''}</td>
+            <td class="px-4 py-3 align-middle font-medium text-gray-900">${formatPrice(precio)}</td>
+            <td class="px-4 py-3 align-middle text-gray-600">${cantidad}</td>
+            <td class="px-4 py-3 align-middle text-gray-600">
+                <select
+                    name="comprador_${pId}"
+                    data-pedido-id="${pId}"
+                    class="buyer-select block w-full rounded-md border-gray-300 px-2 py-1.5 bg-white text-xs shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                >
+                    <option value="">Sin asignar</option>
+                    ${buyerOptionsHTML}
+                </select>
+            </td>
+        `;
+
+        const select = tr.querySelector('select');
+        if (select && cId) {
+            select.value = cId;
+        }
+
+        tbody.appendChild(tr);
+    });
+  }
+
+  async function loadData() {
+    const errorDiv = document.getElementById("global-error");
+    
+    try {
+        const [compRes, pedRes] = await Promise.all([
+            fetch(apiCompradores),
+            fetch(apiPedidos),
+        ]);
+
+        if (!compRes.ok) throw new Error(`Error Compradores: ${compRes.status}`);
+        if (!pedRes.ok) throw new Error(`Error Pedidos: ${pedRes.status}`);
+
+        globalCompradores = await compRes.json();
+        const pedidosJson = await pedRes.json();
+        
+        globalPedidos = Array.isArray(pedidosJson) 
+            ? pedidosJson 
+            : (pedidosJson ? [pedidosJson] : []);
+
+        renderFilterOptions();
+        renderTable();
+        calculateTotalAndFilter();
+
+    } catch (e: any) {
+        console.error(e);
+        const tbody = document.getElementById('pedidos-body');
+        if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-red-500">Error al cargar datos</td></tr>`;
+        
+        if (errorDiv) {
+            errorDiv.textContent = e.message || "Error desconocido";
+            errorDiv.classList.remove('hidden');
+        }
+    }
+  }
+
+  loadData();
+
+  const filterSelect = document.getElementById('filter-comprador');
+  if (filterSelect) {
+      filterSelect.addEventListener('change', calculateTotalAndFilter);
+  }
+
+    const searchInput = document.getElementById('search-pedido');
+    if (searchInput) {
+      searchInput.addEventListener('input', calculateTotalAndFilter);
+    }
+
+  document.addEventListener("change", async (e) => {
+    const target = e.target as HTMLElement;
+    const select = target.closest(".buyer-select") as HTMLSelectElement | null;
+    
+    if (!select) return;
+
+    const pedidoId = select.dataset.pedidoId;
+    const compradorId = select.value;
+    
+    if (!pedidoId) return;
+
+    select.disabled = true;
+
+    try {
+      let res;
+      if (!compradorId) {
+        res = await fetch(`${desasignarCompradorBase}/${Number(pedidoId)}`, { method: "PATCH" });
+      } else {
+        res = await fetch(asignarComprador, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id_pedido: Number(pedidoId),
+            id_comprador: Number(compradorId),
+          }),
+        });
+      }
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || "Error en el servidor");
+
+      select.classList.add("ring-2", "ring-green-500", "border-green-500");
+      setTimeout(() => select.classList.remove("ring-2", "ring-green-500", "border-green-500"), 1500);
+
+      const row = select.closest('tr');
+      if (row) {
+        row.setAttribute('data-comprador-id', compradorId ? String(Number(compradorId)) : '');
+        calculateTotalAndFilter();
+      }
+
+    } catch (err: any) {
+      console.error("[Error Asignación]:", err);
+      select.classList.add("ring-2", "ring-red-500", "border-red-500");
+      alert(err.message || "No se pudo asignar el comprador");
+      setTimeout(() => select.classList.remove("ring-2", "ring-red-500", "border-red-500"), 1500);
+    } finally {
+      select.disabled = false;
+    }
+  });
+
+  const overlay = document.getElementById('image-zoom-modal');
+  const zoomImg = document.getElementById('zoomed-image') as HTMLImageElement | null;
+
+  function closeZoom(){
+    if (overlay && zoomImg) {
+        overlay.classList.add('hidden');
+        overlay.classList.remove('flex');
+        zoomImg.removeAttribute('src');
+    }
+  }
+
+  if (overlay && zoomImg) {
+    document.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      const imgBtn = target.closest('img[data-zoom-src]');
+      if (imgBtn) {
+        const src = imgBtn.getAttribute('data-zoom-src') || imgBtn.getAttribute('src');
+        if (src) {
+            zoomImg.setAttribute('src', src);
+            overlay.classList.remove('hidden');
+            overlay.classList.add('flex');
+        }
+        return;
+      }
+      if (target.closest('[data-close]') || target === overlay) {
+        closeZoom();
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeZoom();
+    });
+  }
+</script>
