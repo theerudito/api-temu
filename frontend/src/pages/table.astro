@@ -4,8 +4,11 @@ import MainLayout from "../layouts/main.astro";
 
 <MainLayout title="Totales por Comprador">
   <div class="p-4 space-y-6">
-    
-    <div id="global-error" class="hidden p-4 rounded-md bg-red-100 text-red-700 border border-red-200"></div>
+    <div
+      id="global-error"
+      class="hidden p-4 rounded-md bg-red-100 text-red-700 border border-red-200"
+    >
+    </div>
 
     <section>
       <h2 class="text-xl font-bold mb-4">Totales por Comprador</h2>
@@ -13,19 +16,28 @@ import MainLayout from "../layouts/main.astro";
         <table class="min-w-full text-sm bg-white">
           <thead class="bg-gray-50 border-b">
             <tr>
-              <th class="px-4 py-3 text-left font-semibold text-gray-700">Comprador</th>
-              <th class="px-4 py-3 text-left font-semibold text-gray-700">Pedidos</th>
-              <th class="px-4 py-3 text-left font-semibold text-gray-700">Envío (Share)</th>
-              <th class="px-4 py-3 text-left font-semibold text-gray-700">Total con envío</th>
+              <th class="px-4 py-3 text-left font-semibold text-gray-700"
+                >Comprador</th
+              >
+              <th class="px-4 py-3 text-left font-semibold text-gray-700"
+                >Pedidos</th
+              >
+              <th class="px-4 py-3 text-left font-semibold text-gray-700"
+                >Envío (Share)</th
+              >
+              <th class="px-4 py-3 text-left font-semibold text-gray-700"
+                >Total con envío</th
+              >
             </tr>
           </thead>
           <tbody id="totales-body" class="divide-y divide-gray-100">
             <tr>
-                <td colspan="4" class="p-8 text-center text-gray-500 italic">Calculando totales...</td>
+              <td colspan="4" class="p-8 text-center text-gray-500 italic"
+                >Calculando totales...</td
+              >
             </tr>
           </tbody>
-          <tfoot id="totales-foot" class="bg-gray-50 border-t hidden">
-            </tfoot>
+          <tfoot id="totales-foot" class="bg-gray-50 border-t hidden"> </tfoot>
         </table>
       </div>
     </section>
@@ -61,7 +73,7 @@ import MainLayout from "../layouts/main.astro";
     totalConEnvio: number;
   }
 
-  const serverBaseUrl = "http://192.168.3.16:8000/api/v1";
+  const serverBaseUrl = "http://192.168.3.16:2000/api/v1";
   const apiCompradores = `${serverBaseUrl}/comprador`;
   const apiPedidos = `${serverBaseUrl}/pedidos`;
   const SHIPPING_COST = 20;
@@ -79,7 +91,10 @@ import MainLayout from "../layouts/main.astro";
 
   function formatPrice(v: number) {
     return Number.isFinite(v)
-      ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(v)
+      ? new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: "USD",
+        }).format(v)
       : "$0.00";
   }
 
@@ -101,10 +116,17 @@ import MainLayout from "../layouts/main.astro";
 
       const compradores: Comprador[] = await compRes.json();
       const pedidosRaw = await pedRes.json();
-      const pedidos: Pedido[] = Array.isArray(pedidosRaw) ? pedidosRaw : (pedidosRaw ? [pedidosRaw] : []);
-      const totalsByComprador: Record<string, { total: number; count: number }> = {};
+      const pedidos: Pedido[] = Array.isArray(pedidosRaw)
+        ? pedidosRaw
+        : pedidosRaw
+          ? [pedidosRaw]
+          : [];
+      const totalsByComprador: Record<
+        string,
+        { total: number; count: number }
+      > = {};
 
-      pedidos.forEach(p => {
+      pedidos.forEach((p) => {
         const cid = p.id_comprador;
         if (cid === null || cid === undefined || String(cid) === "") return;
 
@@ -122,44 +144,51 @@ import MainLayout from "../layouts/main.astro";
       let rows: RowData[] = compradores
         .map((cmp) => {
           const id = cmp.id ?? cmp.id_comprador ?? 0;
-          const bucket = totalsByComprador[String(id)] || { total: 0, count: 0 };
+          const bucket = totalsByComprador[String(id)] || {
+            total: 0,
+            count: 0,
+          };
           return {
             id: id,
             name: getCompradorLabel(cmp),
             total: bucket.total,
             count: bucket.count,
             envio: 0,
-            totalConEnvio: 0
+            totalConEnvio: 0,
           };
         })
         .filter((r) => r.count > 0)
         .sort((a, b) => b.total - a.total);
 
       const buyersWithOrders = rows.length;
-      const shippingShare = buyersWithOrders > 0 ? SHIPPING_COST / buyersWithOrders : 0;
-      rows = rows.map(r => ({
+      const shippingShare =
+        buyersWithOrders > 0 ? SHIPPING_COST / buyersWithOrders : 0;
+      rows = rows.map((r) => ({
         ...r,
         envio: shippingShare,
-        totalConEnvio: r.total + shippingShare
+        totalConEnvio: r.total + shippingShare,
       }));
-      tbody.innerHTML = '';
+      tbody.innerHTML = "";
       if (rows.length === 0) {
         tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-gray-400">No hay pedidos asignados.</td></tr>`;
       } else {
-        rows.forEach(r => {
-            const tr = document.createElement('tr');
-            tr.className = "hover:bg-gray-50 transition-colors";
-            tr.innerHTML = `
+        rows.forEach((r) => {
+          const tr = document.createElement("tr");
+          tr.className = "hover:bg-gray-50 transition-colors";
+          tr.innerHTML = `
                 <td class="px-4 py-3 text-gray-800 font-medium">${r.name}</td>
                 <td class="px-4 py-3 text-gray-600">${r.count}</td>
                 <td class="px-4 py-3 text-gray-900">${formatPrice(r.envio)}</td>
                 <td class="px-4 py-3 text-gray-900 font-semibold">${formatPrice(r.totalConEnvio)}</td>
             `;
-            tbody.appendChild(tr);
+          tbody.appendChild(tr);
         });
       }
       const totalPedidos = rows.reduce((acc, r) => acc + r.count, 0);
-      const grandTotalConEnvio = rows.reduce((acc, r) => acc + r.totalConEnvio, 0);
+      const grandTotalConEnvio = rows.reduce(
+        (acc, r) => acc + r.totalConEnvio,
+        0,
+      );
       const totalEnvioMostrar = buyersWithOrders > 0 ? SHIPPING_COST : 0;
       tfoot.innerHTML = `
         <tr>
@@ -169,8 +198,7 @@ import MainLayout from "../layouts/main.astro";
             <td class="px-4 py-3 text-gray-900 font-bold">${formatPrice(grandTotalConEnvio)}</td>
         </tr>
       `;
-      tfoot.classList.remove('hidden');
-
+      tfoot.classList.remove("hidden");
     } catch (e: any) {
       console.error(e);
       tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">Error cargando totales.</td></tr>`;
