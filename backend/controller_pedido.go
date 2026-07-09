@@ -13,11 +13,11 @@ func ObtenerPedidos(c *fiber.Ctx) error {
 	rows, err := db.Query(`
 		SELECT 
 			p.id_pedido, 
-			p.nombre AS pedido, 
-			p.precio, 
-			p.imagen, 
-			p.variante, 
-			p.cantidad, 
+			COALESCE(p.nombre, '') AS pedido, 
+			COALESCE(p.precio, 0) AS precio,
+			COALESCE(p.imagen, '') AS imagen,
+			COALESCE(p.variante, '') AS variante,
+			COALESCE(p.cantidad, 0 ) AS cantidad,
 			COALESCE(c.nombre, '') AS comprador,
 			COALESCE(c.id_comprador, 0) AS id_comprador
 		FROM pedido AS p
@@ -76,11 +76,11 @@ func ObtenerPedido(c *fiber.Ctx) error {
 	err := db.QueryRow(`
 		SELECT 
 			p.id_pedido, 
-			p.nombre AS pedido, 
-			p.precio, 
-			p.imagen, 
-			p.variante, 
-			p.cantidad, 
+			COALESCE(p.nombre, '') AS pedido, 
+			COALESCE(p.precio, 0) AS precio,
+			COALESCE(p.imagen, '') AS imagen,
+			COALESCE(p.variante, '') AS variante,
+			COALESCE(p.cantidad, 0 ) AS cantidad,
 			COALESCE(c.nombre, '') AS comprador,
 			COALESCE(c.id_comprador, 0) AS id_comprador
 		FROM pedido p
@@ -126,11 +126,11 @@ func ObtenerPedidosPorComprador(c *fiber.Ctx) error {
 	rows, err := db.Query(`
 		SELECT 
 			p.id_pedido, 
-			p.nombre AS pedido, 
-			p.precio, 
-			p.imagen, 
-			p.variante, 
-			p.cantidad, 
+			COALESCE(p.nombre, '') AS pedido, 
+			COALESCE(p.precio, 0) AS precio,
+			COALESCE(p.imagen, '') AS imagen,
+			COALESCE(p.variante, '') AS variante,
+			COALESCE(p.cantidad, 0 ) AS cantidad,
 			COALESCE(c.nombre, '') AS comprador,
 			COALESCE(c.id_comprador, 0) AS id_comprador
 		FROM pedido p
